@@ -12,6 +12,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Clear loading message
       activitiesList.innerHTML = "";
+      // Reset activity select options before repopulating
+      activitySelect.innerHTML = '<option value="">-- Select an activity --</option>';
 
       // Populate activities list
       Object.entries(activities).forEach(([name, details]) => {
@@ -20,14 +22,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const spotsLeft = details.max_participants - details.participants.length;
 
-        // Build participants list HTML
+        // Build participants list HTML with delete buttons
         let participantsHTML = "";
         if (details.participants.length > 0) {
           participantsHTML = `
             <div class="participants-section">
               <strong>Participants:</strong>
               <ul class="participants-list">
-                ${details.participants.map(p => `<li>${p}</li>`).join("")}
+                ${details.participants.map(p => `<li><span class="participant-email">${p}</span><button class="delete-btn" data-activity="${name}" data-email="${p}" aria-label="Unregister ${p}">✖</button></li>`).join("")}
               </ul>
             </div>
           `;
@@ -62,6 +64,36 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // Handle clicks on delete buttons (event delegation)
+  document.addEventListener("click", async (event) => {
+    const target = event.target;
+    if (target.matches(".delete-btn")) {
+      const activity = target.dataset.activity;
+      const email = target.dataset.email;
+
+      if (!activity || !email) return;
+
+      if (!confirm(`Unregister ${email} from ${activity}?`)) return;
+
+      try {
+        const resp = await fetch(`/activities/${encodeURIComponent(activity)}/participants?email=${encodeURIComponent(email)}`, {
+          method: "DELETE",
+        });
+
+        const result = await resp.json();
+        if (resp.ok) {
+          // Refresh activity list to reflect change
+          fetchActivities();
+        } else {
+          alert(result.detail || "Failed to unregister participant");
+        }
+      } catch (err) {
+        console.error("Error unregistering participant:", err);
+        alert("Failed to unregister participant. See console for details.");
+      }
+    }
+  });
+
   // Handle form submission
   signupForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -81,11 +113,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (response.ok) {
         messageDiv.textContent = result.message;
-        messageDiv.className = "success";
+        messageDiv.className = "message success";
         signupForm.reset();
+        // Refresh the activities list so the new participant appears
+        fetchActivities();
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
-        messageDiv.className = "error";
+        messageDiv.className = "message error";
       }
 
       messageDiv.classList.remove("hidden");
